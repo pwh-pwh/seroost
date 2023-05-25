@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{read, File};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::thread::sleep;
 use std::{fs, io};
@@ -29,12 +29,9 @@ impl<'a> Lexer<'a> {
         token
     }
 
-    fn chop_while<P>(&mut self, predicate: P) -> &'a [char]
-    where
-        P: Fn(&char) -> bool,
-    {
+    fn chop_while(&mut self, predicate: fn(&char) -> bool) -> &'a [char] {
         let mut n = 0;
-        while self.content.len() > 0 && predicate(&self.content[n]) {
+        while !self.content.is_empty() && predicate(&self.content[n]) {
             n += 1;
         }
         self.chop(n)
@@ -84,27 +81,74 @@ fn read_entire_xml_file<P: AsRef<Path>>(file_path: P) -> io::Result<String> {
     Ok(content)
 }
 
+type TermFreq = HashMap<String, usize>;
+type TermFreqIndex = HashMap<PathBuf, TermFreq>;
+
 fn main() -> io::Result<()> {
+    let index_path = "index.json";
+    let index_file = File::open(index_path)?;
+    println!("Reading {index_file:?}");
+    let tf_index: TermFreqIndex = serde_json::from_reader(index_file)?;
+    for (path, tf) in tf_index {
+        println!("{path:?} has {count} tokens", count = tf.len());
+    }
+    Ok(())
+}
+
+fn main2() -> io::Result<()> {
     /*let file_path = "docs.gl/gl4/glClear.xhtml";
     println!(
         "{content}",
         content = read_entire_xml_file(file_path).unwrap()
     );*/
-    let content = read_entire_xml_file("docs.gl/gl4/glClear.xhtml")?
-        .chars()
-        .collect::<Vec<_>>();
+    //read one file
+    /*let file_path = "docs.gl/gl4/glClear.xhtml";
+    let content = read_entire_xml_file(file_path)?.chars().collect::<Vec<_>>();
     let lexer = Lexer::new(&content);
+    let mut tf = HashMap::<String, usize>::new();
     for token in lexer {
-        println!("{token}", token = token.iter().collect::<String>())
+        let term = token
+            .iter()
+            .map(|t| t.to_ascii_uppercase())
+            .collect::<String>();
+        *tf.entry(term).or_default() += 1;
     }
-    /*let all_documents = HashMap::<String, HashMap<String, usize>>::new();
+    let mut stats = tf.iter().collect::<Vec<_>>();
+    stats.sort_by_key(|(t, f)| *f);
+    stats.reverse();
+    println!("{file_path}");
+    for (t, f) in stats.iter().take(10) {
+        println!("   {t}:{f}");
+    }*/
+    // let all_documents = HashMap::<String, HashMap<String, usize>>::new();
     let dir_path = "docs.gl/gl4/";
+    let top_n = 10;
     let dir = fs::read_dir(dir_path)?;
+    let mut tf_index = TermFreqIndex::new();
     for file in dir {
         let file_path = file?.path();
-        let content = read_entire_xml_file(&file_path)?;
-        println!("{file_path:?} => size {size}", size = content.len());
-    }*/
+        println!("Indexing {file_path:?}");
+        let content = read_entire_xml_file(&file_path)?
+            .chars()
+            .collect::<Vec<_>>();
+        let lexer = Lexer::new(&content);
+        let mut tf = TermFreq::new();
+        for token in lexer {
+            let term = token
+                .iter()
+                .map(|t| t.to_ascii_uppercase())
+                .collect::<String>();
+            *tf.entry(term).or_default() += 1;
+        }
+        let mut stats = tf.iter().collect::<Vec<_>>();
+        stats.sort_by_key(|(t, f)| *f);
+        stats.reverse();
+        tf_index.insert(file_path, tf);
+    }
+    let index_path = "index.json";
+    println!("saving {index_path}");
+    let index_file = File::create(index_path)?;
+    serde_json::to_writer(index_file, &tf_index).expect("TODO: panic message");
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{BufReader, BufWriter, Read};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::result::Result;
@@ -76,7 +76,7 @@ fn parse_entire_xml_file(file_path: &Path) -> Result<String, ()> {
             file_path = file_path.display()
         );
     })?;
-    let er = EventReader::new(file);
+    let er = EventReader::new(BufReader::new(file));
     let mut content = String::new();
     for event in er.into_iter() {
         let event = event.map_err(|err| {
@@ -125,7 +125,7 @@ fn save_tf_index(tf_index: &TermFreqIndex, index_path: &str) -> Result<(), ()> {
         eprintln!("ERROR: could not create index file {index_path}: {err}");
     })?;
 
-    serde_json::to_writer(index_file, &tf_index).map_err(|err| {
+    serde_json::to_writer(BufWriter::new(index_file), &tf_index).map_err(|err| {
         eprintln!("ERROR: could not serialize index into file {index_path}: {err}");
     })?;
 

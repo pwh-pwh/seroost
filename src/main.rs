@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::env;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
@@ -94,22 +95,25 @@ fn add_folder_to_model(dir_path: &Path, model: &mut Model) -> Result<(), ()> {
         };
 
         let mut tf = TermFreq::new();
-
+        let mut n = 0;
         for term in Lexer::new(&content) {
             if let Some(freq) = tf.get_mut(&term) {
                 *freq += 1;
             } else {
                 tf.insert(term, 1);
             }
+            n += 1;
         }
-
-        model.tfpd.insert(file_path, tf);
+        for t in tf.keys() {
+            *model.df.entry(t.to_string()).or_default() += 1;
+        }
+        model.tfpd.insert(file_path, (n, tf));
     }
 
     Ok(())
 }
 
-// TODO: Precache as much of tf-idf values as possible during indexing
+// TODO: Precache as much of compute_tf-compute_idf values as possible during indexing
 
 fn usage(program: &str) {
     eprintln!("Usage: {program} [SUBCOMMAND] [OPTIONS]");
